@@ -8,7 +8,7 @@
 > - Task 2: `watchJob(id)` polls every 2 s; no SSE and no stream ticket.
 > - Task 3: `id` and `en` only; `zh` comes later if time allows.
 > - Task 6: only `AtomLoader` plus one simple animation on the Dashboard; skip `WeekAtom` zoom, `DayAtom`, `StageAtom`, the keyboard controls and the hidden screen-reader list.
-> - Task 7: Dashboard blocks for cut features show an empty state.
+> - Task 7: hide the blocks for cut features (points ring, "Top 5 minggu ini", "Rekam kelas"); keep "7 hari ke depan", "Pertanyaan untuk kamu" (latest questions in the user's subjects) and "Aktivitas terakhir".
 > - "Done when": skip the 5-second recording and Lighthouse; screenshots in light and 400 px are enough.
 
 ## Tasks

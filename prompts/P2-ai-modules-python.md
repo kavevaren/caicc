@@ -6,10 +6,10 @@
 > **Scope cut (see `_RULES.md`):**
 > - Task 1: the FAST role maps to `Qwen/Qwen3.8-27B`.
 > - Task 2: documents and images only; skip figure extraction and charts (`figures.py`, `charts.py`).
-> - Task 3: transcript files only. Media always raises `AIError("transcription_disabled")`; no whisper.
+> - Task 3: skip (F2 is cut).
 > - Task 4: skip.
-> - Task 5: do it last, after tasks 1–2 and 6.
-> - "Done when": skip the whisper, chart, figure and speech-clip items.
+> - Task 5: only `hint`, and only after tasks 1, 2 and 6; skip similar, tags and moderate.
+> - "Done when": skip the whisper, transcript, chart, figure, speech-clip and .srt items.
 
 ## Reuse (if the old Streamlit repo is available in `CAICC #2`)
 - Copy into `server/ai/`:

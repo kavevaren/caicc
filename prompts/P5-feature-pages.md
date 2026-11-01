@@ -4,12 +4,14 @@
 **Goal:** every page works on the real FastAPI server, with the design and motion from DESIGN.md, deployed on the final Studio. Remove the MSW mocks from the production build.
 
 > **Scope cut (see `_RULES.md`):**
-> - Order: pages 1, 2 and 7 (Perpustakaan only), then 5 and 6, then 4, then 3.
-> - Page 1: skip the figure toggles and "Di balik layar"; the job shows `AtomLoader` with the stage name.
-> - Page 3: transcript-file import only; hide Rekam and the media drop.
+> - Order: pages 1, 2 and 7 (Perpustakaan only), then 4 (Jadwal), then "Tanya di Forum" on pages 1 and 2 with page 5, then the rest of page 5.
+> - Page 1: skip the figure toggles and "Di balik layar"; the job shows `AtomLoader` with the stage name. "Ask in Forum" becomes "Tanya di Forum": it opens Ask prefilled with the document's subject and a link to the document.
+> - Page 3: skip (F2 is cut); remove it from the sidebar.
 > - Page 4: local mode only; skip the Google card, the sticky day atom and the fly-in animations.
+> - Page 5: list filtered by subject, Ask (title counter 10–150, write/preview with KaTeX, attachments), Detail (answers, owner edit/delete); "Minta petunjuk AI" last. Skip votes, best answer, follow, similar questions and tags.
+> - Page 6: skip (no points, no leaderboard); remove it from the sidebar.
 > - Page 7: skip Notifikasi.
-> - "Done when": the e2e loop is register → summarize a PDF → open it in Perpustakaan, plus forum and Jadwal if they were built; screenshots in light and 400 px.
+> - "Done when": the e2e loop is register → summarize a PDF → deadline accepted into Jadwal → "Tanya di Forum" → user 2 answers; screenshots in light and 400 px. Skip the Rekam & Transkrip and .srt checks.
 > - Go / no-go, Tue 3 Nov 12:00: only Dashboard + F1 must work on the deployed Studio.
 
 ## Pages

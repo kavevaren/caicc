@@ -11,12 +11,15 @@ Three days are left, so the scope is cut. Every phase prompt has a "Scope cut" b
   - a simple Dashboard on real data;
   - locales `id` and `en`;
   - deployed on the public Studio, plus the evidence pack.
-- **If time allows, in this order:**
-  1. F4 Forum + Leaderboard (with AI hint and similar questions);
-  2. F3 Jadwal in local mode only (manual events, deadlines from summaries, `.ics`, template link);
-  3. F2 transcript-file import only (`.srt`/`.vtt`/`.txt` → meeting summary + action items);
-  4. locale `zh`.
+- **Feature priority (developer's order, 1 Nov). Build in this order after the Must list; each one must work on the Studio before the next starts:**
+  1. **Summary:** F1, as in the Must list.
+  2. **Jadwal:** F3 in local mode only (manual events, deadlines from summaries → Jadwal, `.ics`, template link).
+  3. **Questions from a summary:** "Tanya di Forum" on the summary result and DocumentView opens the Ask form prefilled with the document's subject, plus a link to the document in the body. Other students answer it. No contract change: use the existing `subject_id`.
+  4. **Forum between students:** list (filter by subject), ask (title 10–150), detail, answer, owner edit/delete. Add "Minta petunjuk AI" only if time is left.
+  5. Locale `zh`, if time is left after everything else.
 - **Cut:**
+  - forum votes, best answer, follow, points, leaderboard, similar questions while typing, and tags;
+  - F2 entirely (the Rekam & Transkrip page, transcript import and `ai.transcribe`);
   - faster-whisper and all audio/video input: `ENABLE_TRANSCRIPTION=false`, and remove `faster-whisper` from `server/requirements.txt` and the pre-download from the `Dockerfile`;
   - Google OAuth and Calendar (local mode only);
   - SSE (polling `GET /api/jobs/{id}` only);
