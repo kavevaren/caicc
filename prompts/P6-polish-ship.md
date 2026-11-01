@@ -3,6 +3,14 @@
 **Read:** `_RULES.md`, SPEC §2, §12, §13.
 **Goal:** a stable public Studio, a clean project, and complete evidence for the judges.
 
+> **Scope cut (see `_RULES.md`):**
+> - Code freeze Wed 4 Nov 12:00; after that only deploy, README and evidence.
+> - Task 2: already decided; transcription stays off and `faster-whisper` stays removed.
+> - Task 4: skip Lighthouse; the e2e run covers only the features that were built.
+> - Task 5: skip the 20-user load check; no Google vars.
+> - Task 6: skip the Google Cloud steps; list the cut features under known limits.
+> - Task 8: state the scope cut honestly in the known limits.
+
 ## Tasks
 1. **Remove leftovers:** mocks from the production build, unused deps, leftover test output. `arsip/` stays out of the image and out of the submission zip. The old Streamlit app stays only in its own folder (`CAICC #2`), never in this project.
 2. **Transcription decision.** Read "Assumptions" in `docs/PROGRESS.md` for the organizers' answer on faster-whisper:

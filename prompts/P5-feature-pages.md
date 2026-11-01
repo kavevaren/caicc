@@ -3,6 +3,15 @@
 **Read:** `_RULES.md`, DESIGN §3.5, §3.6, §4.3–§4.8, SPEC §8.3–§8.8, §13.
 **Goal:** every page works on the real FastAPI server, with the design and motion from DESIGN.md, deployed on the final Studio. Remove the MSW mocks from the production build.
 
+> **Scope cut (see `_RULES.md`):**
+> - Order: pages 1, 2 and 7 (Perpustakaan only), then 5 and 6, then 4, then 3.
+> - Page 1: skip the figure toggles and "Di balik layar"; the job shows `AtomLoader` with the stage name.
+> - Page 3: transcript-file import only; hide Rekam and the media drop.
+> - Page 4: local mode only; skip the Google card, the sticky day atom and the fly-in animations.
+> - Page 7: skip Notifikasi.
+> - "Done when": the e2e loop is register → summarize a PDF → open it in Perpustakaan, plus forum and Jadwal if they were built; screenshots in light and 400 px.
+> - Go / no-go, Tue 3 Nov 12:00: only Dashboard + F1 must work on the deployed Studio.
+
 ## Pages
 1. **Ringkas Materi:**
    - upload + options cards; the drop zone shows the `MAX_UPLOAD_MB` limit;

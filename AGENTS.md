@@ -6,7 +6,7 @@ These rules apply to every message in every session, in addition to `prompts/_RU
 
 `docs/PROGRESS.md` is the only memory of this project. A new session must be able to continue from it alone. If it does not exist, create it with the template below before doing anything else.
 
-**At the start of every session:** read `docs/PROGRESS.md` first, then say in one line which phase and task you are continuing and the next step written there.
+**At the start of every session:** if `prompts/_RULES.md` is not already in your context, read it (Claude Code loads it through `CLAUDE.md`, OpenCode through `opencode.json`). Then read `docs/PROGRESS.md`, and say in one line which phase and task you are continuing and the next step written there.
 
 **Write a checkpoint:**
 1. after every numbered task in a phase prompt, before starting the next task;

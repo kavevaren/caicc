@@ -3,6 +3,14 @@
 **Read:** `_RULES.md`, `docs/design/DESIGN.md` (all of it), `docs/design/dashboard-mockup.html`, SPEC §8.1–§8.2, §8.9, §13 (iframe and proxy rules).
 **Goal:** the React app shell, auth and onboarding, and the Dashboard with the full atom system. It runs against the MSW mocks first, then against the FastAPI server when that is ready. Work only inside `web/`.
 
+> **Scope cut (see `_RULES.md`):**
+> - Task 1: only the UI kit components the Must pages use.
+> - Task 2: `watchJob(id)` polls every 2 s; no SSE and no stream ticket.
+> - Task 3: `id` and `en` only; `zh` comes later if time allows.
+> - Task 6: only `AtomLoader` plus one simple animation on the Dashboard; skip `WeekAtom` zoom, `DayAtom`, `StageAtom`, the keyboard controls and the hidden screen-reader list.
+> - Task 7: Dashboard blocks for cut features show an empty state.
+> - "Done when": skip the 5-second recording and Lighthouse; screenshots in light and 400 px are enough.
+
 ## Tasks
 1. **Foundation:**
    - `tokens.css` (DESIGN §1.1, light + dark) and `global.css`;

@@ -3,6 +3,14 @@
 **Read:** `_RULES.md`, SPEC §2, §3.2 (AI isolation), §7, §9.1–§9.2, §10, §12 (Python).
 **Goal:** `server/ai/` implements every function in SPEC §7 exactly. It never touches the database and never imports anything from `server/api/` or `server/store/`. Work only inside `server/ai/` and `server/tests/ai/`.
 
+> **Scope cut (see `_RULES.md`):**
+> - Task 1: the FAST role maps to `Qwen/Qwen3.8-27B`.
+> - Task 2: documents and images only; skip figure extraction and charts (`figures.py`, `charts.py`).
+> - Task 3: transcript files only. Media always raises `AIError("transcription_disabled")`; no whisper.
+> - Task 4: skip.
+> - Task 5: do it last, after tasks 1–2 and 6.
+> - "Done when": skip the whisper, chart, figure and speech-clip items.
+
 ## Reuse (if the old Streamlit repo is available in `CAICC #2`)
 - Copy into `server/ai/`:
   - `core/llm.py`, `core/prompts.py`, `core/schemas.py`;

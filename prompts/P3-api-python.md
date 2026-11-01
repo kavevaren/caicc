@@ -3,6 +3,13 @@
 **Read:** `_RULES.md`, SPEC §3, §5, §6, §8 (rules per page), §9.3–§9.4, §11, §12 (Python), §13.
 **Goal:** the FastAPI app implements `contracts/openapi.yaml`, owns SQLite and all product rules, and runs jobs. Work in `server/api/`, `server/store/`, `server/jobs/`, `server/domain/`, `server/main.py`, `server/seed.py` and their tests. Never edit `server/ai/` (lane A); call it only through the SPEC §7 functions, using `FakeLLM` until P2 is done.
 
+> **Scope cut (see `_RULES.md`):**
+> - Order: task 1, task 2, auth, dashboard, task 4 (F1 summaries), then forum + points + leaderboard, then events in local mode.
+> - Task 3: skip notifications, and skip Google OAuth and Calendar (leave them returning 501).
+> - Task 4: polling only; skip the SSE stream; `/api/transcripts` accepts transcript files only.
+> - "Done when": skip schemathesis and the 20-user load check; the job only needs to show its stages over polling.
+> - Gate, Mon 2 Nov 12:00: only auth, dashboard and F1 must be green.
+
 ## Tasks
 1. **App and startup (`server/main.py`):**
    - config from the environment (SPEC §4.1);

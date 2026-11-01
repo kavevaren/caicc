@@ -1,6 +1,31 @@
 # Agent rules (read once; every phase prompt assumes them)
 
-You build **Orvina** from `docs/SPEC.md` (functional + architecture) and `docs/design/DESIGN.md` (UI + motion). The static target is `docs/design/dashboard-mockup.html`. If anything here conflicts with a phase prompt, the phase prompt wins; if the SPEC is unclear, ask before coding.
+You build **Orvina** from `docs/SPEC.md` (functional + architecture) and `docs/design/DESIGN.md` (UI + motion). The static target is `docs/design/dashboard-mockup.html`. If anything here conflicts with a phase prompt, the phase prompt wins, except for "Scope cut" below, which wins over every phase prompt and the SPEC; if the SPEC is unclear, ask before coding.
+
+## Scope cut (1 Nov 2026; deadline: submit Wed 4 Nov, 16:00–23:59 WIB)
+Three days are left, so the scope is cut. Every phase prompt has a "Scope cut" block naming the tasks to skip. Mark each skipped item "skipped: scope cut" in `docs/PROGRESS.md` (under "Not done / blocked"), and leave its endpoints returning 501 as in the contract.
+- **Must:**
+  - auth (username + password);
+  - F1 Ringkas Materi for documents only (PDF, DOCX, PPTX, TXT/MD, images) → summary with LaTeX and code;
+  - Perpustakaan + DocumentView;
+  - a simple Dashboard on real data;
+  - locales `id` and `en`;
+  - deployed on the public Studio, plus the evidence pack.
+- **If time allows, in this order:**
+  1. F4 Forum + Leaderboard (with AI hint and similar questions);
+  2. F3 Jadwal in local mode only (manual events, deadlines from summaries, `.ics`, template link);
+  3. F2 transcript-file import only (`.srt`/`.vtt`/`.txt` → meeting summary + action items);
+  4. locale `zh`.
+- **Cut:**
+  - faster-whisper and all audio/video input: `ENABLE_TRANSCRIPTION=false`, and remove `faster-whisper` from `server/requirements.txt` and the pre-download from the `Dockerfile`;
+  - Google OAuth and Calendar (local mode only);
+  - SSE (polling `GET /api/jobs/{id}` only);
+  - the full atom system (keep only `AtomLoader` and one simple Dashboard animation);
+  - figure extraction and generated charts in F1;
+  - notifications;
+  - load tests, Lighthouse targets, schemathesis, recordings.
+- **Models:** `stepfun-ai/Step-3.5-Flash` returns "no provider supported", so the FAST role uses `Qwen/Qwen3.8-27B`.
+- **Daily rule:** each evening, the version running on the Studio must be one we could submit. Hide unfinished features from the UI rather than ship them broken.
 
 ## Non-negotiable (SPEC §2; any break disqualifies us)
 1. **LLMs:**
