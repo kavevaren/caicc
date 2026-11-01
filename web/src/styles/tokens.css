@@ -1,0 +1,183 @@
+/* Orvina design tokens (DESIGN.md §1.1) — light + dark themes. */
+:root,
+:root[data-theme="light"] {
+  --primary: #1b6ca8;
+  --primary-hover: #15588a;
+  --on-primary: #ffffff;
+  --primary-tint: #e7f0f7;
+  --accent: #f4a261;
+  --success: #2d6a4f;
+  --success-tint: #e6f2ec;
+  --warning-text: #8a6100;
+  --warning-tint: #fbf3dc;
+  --danger: #c0392b;
+  --on-danger: #ffffff;
+  --danger-tint: #fbe9e7;
+  --text: #1a1a2e;
+  --muted: #5a5a72;
+  --bg: #fafaf7;
+  --surface: #ffffff;
+  --border: #e2e2dc;
+  --border-strong: #8e8ea3;
+  --orbit: #cbd9e6;
+}
+
+:root[data-theme="dark"] {
+  --primary: #4da8da;
+  --primary-hover: #6bbde8;
+  --on-primary: #12121a;
+  --primary-tint: #1b2e3e;
+  --accent: #f4a261;
+  --success: #52b788;
+  --success-tint: #1a2e27;
+  --warning-text: #e9c46a;
+  --warning-tint: #2e2a1c;
+  --danger: #f06a5e;
+  --on-danger: #12121a;
+  --danger-tint: #3a2024;
+  --text: #e8e8f0;
+  --muted: #9898b0;
+  --bg: #12121a;
+  --surface: #1e1e2e;
+  --border: #2e2e42;
+  --border-strong: #6e6e8c;
+  --orbit: #2f4a60;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3 {
+  font-family: "Outfit", "Inter", system-ui, sans-serif;
+  font-weight: 600;
+}
+
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+
+.card h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+button {
+  font: inherit;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 16px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--primary);
+}
+
+button:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+
+button.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+button.primary:hover {
+  background: var(--primary-hover);
+}
+
+.ok {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.bad {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.pending {
+  color: var(--warning-text);
+  font-weight: 600;
+}
+
+pre {
+  background: var(--primary-tint);
+  border-radius: 10px;
+  padding: 12px;
+  overflow-x: auto;
+  font-size: 13px;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+table.results {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+table.results td,
+table.results th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.meter {
+  width: 220px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.meter > div {
+  height: 100%;
+  width: 0%;
+  background: var(--primary);
+  transition: width 80ms linear;
+}
+
+.atom-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}

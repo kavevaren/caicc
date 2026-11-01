@@ -1,0 +1,5 @@
+{
+  "sdk_type": "docker",
+  "port": 7860,
+  "resource_configuration": "2vcpu-16g"
+}

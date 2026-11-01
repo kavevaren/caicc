@@ -1,0 +1,6 @@
+# Orvina P0 stack — pinned (SPEC §13). Python 3.10 in the image.
+fastapi==0.116.2
+uvicorn[standard]==0.35.0
+openai==1.109.1
+faster-whisper==1.2.1
+python-multipart==0.0.20

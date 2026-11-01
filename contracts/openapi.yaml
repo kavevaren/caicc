@@ -1,0 +1,2400 @@
+openapi: 3.1.0
+info:
+  title: Orvina API
+  version: 0.1.0
+  description: |
+    Public API between the React SPA (web/) and the FastAPI server (server/).
+    This file is the source of truth: change the contract first, then both sides (SPEC §3.1).
+
+    Conventions (SPEC §6):
+    - JSON, except uploads (multipart) and downloads.
+    - Errors: {"error": {"code": "...", "message_key": "errors.<code>"}} with a proper status.
+      No stack trace ever reaches the browser; details go to the log.
+    - Auth: Bearer token in Authorization. The token lives in localStorage (the Studio
+      embeds the app in a cross-site iframe where cookies are unreliable).
+    - SSE uses the stream-ticket flow: POST /api/stream-ticket {job_id} -> single-use
+      ticket valid 60 s -> GET /api/jobs/{id}/stream?ticket=...
+    - Lists paginate with page (20 per page) and return {items, total, page, pages}.
+    - Rate limits per user (in memory): AI endpoints 20/min, uploads 10/min -> 429 rate_limited.
+    - ai_unavailable -> 502, modelscope_token_invalid -> 503 (from the cached health check).
+
+    SSE event shapes for GET /api/jobs/{id}/stream:
+      event: stage   data: {"job_id": "...", "stage": "extract", "stages": ["extract", "figures", ...]}
+      event: done    data: {"job_id": "...", "result_document_id": 42}
+      event: error   data: {"job_id": "...", "error_code": "media_too_long"}
+      A comment line (": heartbeat") is sent every 15 s to keep the connection alive.
+      If no event arrives within 10 s, the client falls back to polling GET /api/jobs/{id} every 2 s (SPEC §13).
+
+    Bug-driven schema constraints:
+    - question title: 10-150 characters (client and server).
+    - event end_at must be strictly after start_at (server rejects with invalid_time_range).
+    - register accept_terms must be true (server rejects with terms_required).
+
+servers:
+  - url: /
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Me
+  - name: Subjects
+  - name: Dashboard
+  - name: Jobs
+  - name: Summaries (F1)
+  - name: Transcripts (F2)
+  - name: Schedule (F3)
+  - name: Forum (F4)
+  - name: Points
+  - name: Notifications
+  - name: Files
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Server, ModelScope and whisper status (ModelScope result cached 5 min)
+      security: []
+      responses:
+        "200":
+          description: Status of the server, the ModelScope probe and whisper.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      summary: Create an account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Account created; the token is stored in localStorage.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: accept_terms not true (terms_required), weak password (weak_password) or invalid username format (invalid_username).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: username taken.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Log in (a failure never reveals whether the username exists)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Session token.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: invalid_credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Invalidate the session
+      responses:
+        "204":
+          description: Logged out.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/stream-ticket:
+    post:
+      tags: [Auth]
+      operationId: createStreamTicket
+      summary: Single-use 60 s ticket for the job SSE stream (Bearer cannot be sent by EventSource)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [job_id]
+              properties:
+                job_id:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Ticket valid for 60 s and a single GET /api/jobs/{id}/stream.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ticket, expires_in]
+                properties:
+                  ticket:
+                    type: string
+                  expires_in:
+                    type: integer
+                    const: 60
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/me:
+    get:
+      tags: [Me]
+      operationId: getMe
+      summary: Current user, points, rank, unread count, onboarding state
+      responses:
+        "200":
+          description: The current user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+    patch:
+      tags: [Me]
+      operationId: patchMe
+      summary: Update profile and preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchMeRequest"
+      responses:
+        "200":
+          description: Updated user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/Validation"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/me/password:
+    post:
+      tags: [Me]
+      operationId: changePassword
+      summary: Change password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password:
+                  type: string
+                new_password:
+                  type: string
+                  minLength: 8
+      responses:
+        "204":
+          description: Password changed.
+        "400":
+          description: wrong current password or weak new password.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/me/onboarding:
+    post:
+      tags: [Me]
+      operationId: completeOnboarding
+      summary: 3-step onboarding (language -> subjects -> Google, skippable); once per user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lang, subject_ids, new_subjects, done]
+              properties:
+                lang:
+                  $ref: "#/components/schemas/Lang"
+                subject_ids:
+                  type: array
+                  items:
+                    type: integer
+                new_subjects:
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 50
+                done:
+                  type: boolean
+      responses:
+        "200":
+          description: Onboarding state saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/subjects:
+    get:
+      tags: [Subjects]
+      operationId: listSubjects
+      summary: All subjects plus the current user's followed flag
+      responses:
+        "200":
+          description: Subject list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Subject"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+    post:
+      tags: [Subjects]
+      operationId: createSubject
+      summary: Create (or reuse) a subject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 50
+      responses:
+        "201":
+          description: The subject.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subject"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/dashboard:
+    get:
+      tags: [Dashboard]
+      operationId: getDashboard
+      summary: "One call, real data: week atom, stats, quick lists (SPEC §6, §8.2)"
+      responses:
+        "200":
+          description: Dashboard payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/jobs/{id}:
+    get:
+      tags: [Jobs]
+      operationId: getJob
+      summary: Job state — also the polling fallback for the SSE stream
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Current job state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/jobs/{id}/stream:
+    get:
+      tags: [Jobs]
+      operationId: streamJob
+      summary: SSE stream of job progress (events stage/done/error, 15 s heartbeat)
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - name: ticket
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Single-use ticket from POST /api/stream-ticket (60 s).
+      responses:
+        "200":
+          description: Server-Sent Events stream. See info.description for the event shapes.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: ticket missing, used, or expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/summaries:
+    post:
+      tags: [Summaries (F1)]
+      operationId: createSummary
+      summary: "Start an F1 summary job (multipart: files + options)"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items:
+                    type: string
+                    format: binary
+                  description: pdf, pptx, docx, txt, md, png, jpg, jpeg, mp4, mov, webm, mp3, wav, m4a; each <= MAX_UPLOAD_MB.
+                title:
+                  type: string
+                  maxLength: 150
+                  description: Defaults to the first filename.
+                subject_id:
+                  type: integer
+                style:
+                  type: string
+                  enum: [one_page, structured_notes, key_points, qa_practice]
+                  default: structured_notes
+                lang:
+                  $ref: "#/components/schemas/Lang"
+                detail:
+                  type: string
+                  enum: [singkat, standar, detail]
+                  default: standar
+                extra:
+                  type: string
+                  maxLength: 500
+                include_figures:
+                  type: boolean
+                  default: true
+                generate_charts:
+                  type: boolean
+                  default: true
+      responses:
+        "202":
+          description: Job queued; poll or stream /api/jobs/{id}.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobRef"
+        "400":
+          description: media_too_long (checked in the job's probe stage) or unsupported file.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "413":
+          $ref: "#/components/responses/FileTooLarge"
+        "422":
+          $ref: "#/components/responses/Validation"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+        "502":
+          $ref: "#/components/responses/AIUnavailable"
+        "503":
+          $ref: "#/components/responses/TokenInvalid"
+
+  /api/documents:
+    get:
+      tags: [Summaries (F1)]
+      operationId: listDocuments
+      summary: "Library: search, filter by kind and subject"
+      parameters:
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [summary, transcript]
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+        - name: subject
+          in: query
+          schema:
+            type: integer
+        - $ref: "#/components/parameters/Page"
+      responses:
+        "200":
+          description: Paginated documents.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/documents/{id}:
+    get:
+      tags: [Summaries (F1)]
+      operationId: getDocument
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: The document with content, figures and extra.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+    patch:
+      tags: [Summaries (F1)]
+      operationId: patchDocument
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 150
+                subject_id:
+                  type: integer
+                content_md:
+                  type: string
+      responses:
+        "200":
+          description: Updated document.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+    delete:
+      tags: [Summaries (F1)]
+      operationId: deleteDocument
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/documents/{id}/figures/{ref}:
+    patch:
+      tags: [Summaries (F1)]
+      operationId: patchFigure
+      summary: Toggle a figure in/out of the rendered summary (no model call)
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - name: ref
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [included]
+              properties:
+                included:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated figure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Figure"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/documents/{id}/export:
+    get:
+      tags: [Summaries (F1)]
+      operationId: exportDocument
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - name: format
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [md, html]
+      responses:
+        "200":
+          description: .md as a zip (summary.md + images/), or a standalone .html.
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+            text/html:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/figures/{id}.png:
+    get:
+      tags: [Summaries (F1)]
+      operationId: getFigurePng
+      summary: Figure image (visibility checked)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The PNG image.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/transcripts:
+    post:
+      tags: [Transcripts (F2)]
+      operationId: createTranscript
+      summary: "Start an F2 job (multipart: media, recorded blob, or transcript file .srt/.vtt/.txt + options)"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                title:
+                  type: string
+                  maxLength: 150
+                source_lang:
+                  type: string
+                  enum: [auto, id, en, zh]
+                  default: auto
+                targets:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/Lang"
+                summary:
+                  type: boolean
+                  default: true
+      responses:
+        "202":
+          description: Job queued; poll or stream /api/jobs/{id}.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobRef"
+        "400":
+          description: transcription_disabled (ENABLE_TRANSCRIPTION=false, media input) or media_too_long.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "413":
+          $ref: "#/components/responses/FileTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+        "502":
+          $ref: "#/components/responses/AIUnavailable"
+        "503":
+          $ref: "#/components/responses/TokenInvalid"
+
+  /api/events:
+    get:
+      tags: [Schedule (F3)]
+      operationId: listEvents
+      summary: "Events in a date range (default: today to +30 days)"
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Events ordered by start_at.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Event"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+    post:
+      tags: [Schedule (F3)]
+      operationId: createEvent
+      summary: New event; end_at must be strictly after start_at
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEventRequest"
+      responses:
+        "201":
+          description: The event.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "400":
+          description: invalid_time_range (end_at not after start_at).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/Validation"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/events/{id}:
+    patch:
+      tags: [Schedule (F3)]
+      operationId: patchEvent
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 150
+                start_at:
+                  type: string
+                  format: date-time
+                end_at:
+                  type: string
+                  format: date-time
+                location:
+                  type: string
+                  maxLength: 150
+                description:
+                  type: string
+                  maxLength: 2000
+                reminder_minutes:
+                  type: integer
+                  enum: [10, 60, 1440]
+      responses:
+        "200":
+          description: Updated event.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "400":
+          description: invalid_time_range.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+    delete:
+      tags: [Schedule (F3)]
+      operationId: deleteEvent
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/events/{id}.ics:
+    get:
+      tags: [Schedule (F3)]
+      operationId: downloadEventIcs
+      summary: RFC 5545 .ics for one event
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: The .ics file.
+          content:
+            text/calendar:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/suggestions:
+    get:
+      tags: [Schedule (F3)]
+      operationId: listSuggestions
+      summary: Pending deadline suggestions (from summaries)
+      responses:
+        "200":
+          description: Suggestions with status pending.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Suggestion"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/suggestions/{id}/accept:
+    post:
+      tags: [Schedule (F3)]
+      operationId: acceptSuggestion
+      summary: Create the event from the suggestion
+      parameters:
+        - $ref: "#/components/parameters/SuggestionId"
+      responses:
+        "201":
+          description: The created event.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/suggestions/{id}/dismiss:
+    post:
+      tags: [Schedule (F3)]
+      operationId: dismissSuggestion
+      parameters:
+        - $ref: "#/components/parameters/SuggestionId"
+      responses:
+        "204":
+          description: Dismissed.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/google/connect:
+    get:
+      tags: [Schedule (F3)]
+      operationId: googleConnect
+      summary: OAuth URL to open in a NEW tab
+      responses:
+        "200":
+          description: The Google consent URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url:
+                    type: string
+                    format: uri
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+        "503":
+          description: Google OAuth not configured (local mode).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/google/callback:
+    get:
+      tags: [Schedule (F3)]
+      operationId: googleCallback
+      summary: OAuth redirect target; serves an HTML page ("Google Calendar terhubung, tab ini boleh ditutup")
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: HTML confirmation page.
+          content:
+            text/html:
+              schema:
+                type: string
+        "400":
+          description: invalid or expired state.
+          content:
+            text/html:
+              schema:
+                type: string
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/google:
+    delete:
+      tags: [Schedule (F3)]
+      operationId: googleDisconnect
+      responses:
+        "204":
+          description: Disconnected.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/questions:
+    get:
+      tags: [Forum (F4)]
+      operationId: listQuestions
+      summary: "Forum list: FTS5 search, status/subject filters, sort"
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, open, answered, followed]
+            default: all
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [newest, most_voted, unanswered]
+            default: newest
+        - name: subject
+          in: query
+          schema:
+            type: integer
+        - $ref: "#/components/parameters/Page"
+      responses:
+        "200":
+          description: Paginated questions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+    post:
+      tags: [Forum (F4)]
+      operationId: createQuestion
+      summary: Ask a question (title 10-150 chars; moderation runs before publish; +2 points)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [title, body_md, subject_id]
+              properties:
+                title:
+                  type: string
+                  minLength: 10
+                  maxLength: 150
+                body_md:
+                  type: string
+                  maxLength: 10000
+                subject_id:
+                  type: integer
+                tags:
+                  type: string
+                  description: Comma-separated, <= 5.
+                files:
+                  type: array
+                  maxItems: 10
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        "201":
+          description: The published question.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+        "400":
+          description: moderation rejected the post (spam/abusive/off_topic) or title length violation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "413":
+          $ref: "#/components/responses/FileTooLarge"
+        "422":
+          $ref: "#/components/responses/Validation"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/questions/similar:
+    post:
+      tags: [Forum (F4)]
+      operationId: similarQuestions
+      summary: AI picks <= 3 similar questions from the FTS5 top 10
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  minLength: 10
+                  maxLength: 150
+                body_md:
+                  type: string
+                  maxLength: 10000
+      responses:
+        "200":
+          description: Similar question ids.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ids]
+                properties:
+                  ids:
+                    type: array
+                    maxItems: 3
+                    items:
+                      type: integer
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+        "502":
+          $ref: "#/components/responses/AIUnavailable"
+
+  /api/questions/tags:
+    post:
+      tags: [Forum (F4)]
+      operationId: suggestTags
+      summary: AI suggests <= 5 lowercase tags
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  maxLength: 150
+                body_md:
+                  type: string
+                  maxLength: 10000
+      responses:
+        "200":
+          description: Suggested tags.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tags]
+                properties:
+                  tags:
+                    type: array
+                    maxItems: 5
+                    items:
+                      type: string
+                      pattern: "^[a-z0-9-]+$"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+        "502":
+          $ref: "#/components/responses/AIUnavailable"
+
+  /api/questions/{id}:
+    get:
+      tags: [Forum (F4)]
+      operationId: getQuestion
+      parameters:
+        - $ref: "#/components/parameters/QuestionId"
+      responses:
+        "200":
+          description: Question with answers (best first, then score, then time).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionDetail"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+    patch:
+      tags: [Forum (F4)]
+      operationId: patchQuestion
+      parameters:
+        - $ref: "#/components/parameters/QuestionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  minLength: 10
+                  maxLength: 150
+                body_md:
+                  type: string
+                  maxLength: 10000
+                subject_id:
+                  type: integer
+      responses:
+        "200":
+          description: Updated question.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Validation"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+    delete:
+      tags: [Forum (F4)]
+      operationId: deleteQuestion
+      parameters:
+        - $ref: "#/components/parameters/QuestionId"
+      responses:
+        "204":
+          description: Deleted (soft); its points are reversed.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/questions/{id}/answers:
+    post:
+      tags: [Forum (F4)]
+      operationId: createAnswer
+      summary: Answer a question (+5 points; notifies followers)
+      parameters:
+        - $ref: "#/components/parameters/QuestionId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [body_md]
+              properties:
+                body_md:
+                  type: string
+                  maxLength: 10000
+                files:
+                  type: array
+                  maxItems: 10
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Answer"
+        "400":
+          description: moderation rejected the post.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/FileTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/questions/{id}/best:
+    post:
+      tags: [Forum (F4)]
+      operationId: markBestAnswer
+      summary: Asker marks the best answer (+15 to the answer, +2 once to the asker)
+      parameters:
+        - $ref: "#/components/parameters/QuestionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answer_id]
+              properties:
+                answer_id:
+                  type: integer
+      responses:
+        "200":
+          description: Updated question.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: only the asker may mark the best answer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/questions/{id}/follow:
+    post:
+      tags: [Forum (F4)]
+      operationId: followQuestion
+      summary: Toggle following a question
+      parameters:
+        - $ref: "#/components/parameters/QuestionId"
+      responses:
+        "200":
+          description: New follow state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [following]
+                properties:
+                  following:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/questions/{id}/hint:
+    post:
+      tags: [Forum (F4)]
+      operationId: requestHint
+      summary: "AI hint (labelled \"Petunjuk AI, bukan jawaban\"); max 3 per user per question; never posted"
+      parameters:
+        - $ref: "#/components/parameters/QuestionId"
+      responses:
+        "200":
+          description: The hint in markdown.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [hint_md, remaining]
+                properties:
+                  hint_md:
+                    type: string
+                  remaining:
+                    type: integer
+                    minimum: 0
+                    maximum: 3
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          description: no hints left.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+        "502":
+          $ref: "#/components/responses/AIUnavailable"
+
+  /api/answers/{id}:
+    patch:
+      tags: [Forum (F4)]
+      operationId: patchAnswer
+      parameters:
+        - $ref: "#/components/parameters/AnswerId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body_md]
+              properties:
+                body_md:
+                  type: string
+                  maxLength: 10000
+      responses:
+        "200":
+          description: Updated answer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Answer"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+    delete:
+      tags: [Forum (F4)]
+      operationId: deleteAnswer
+      parameters:
+        - $ref: "#/components/parameters/AnswerId"
+      responses:
+        "204":
+          description: Deleted (soft); its points are reversed.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/votes:
+    post:
+      tags: [Forum (F4)]
+      operationId: vote
+      summary: Cast or change a vote (no self-votes; one row per user/target)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_type, target_id, value]
+              properties:
+                target_type:
+                  type: string
+                  enum: [answer]
+                target_id:
+                  type: integer
+                value:
+                  type: integer
+                  enum: [1, -1]
+      responses:
+        "200":
+          description: Vote applied.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [score]
+                properties:
+                  score:
+                    type: integer
+        "400":
+          description: self_vote.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/leaderboard:
+    get:
+      tags: [Points]
+      operationId: getLeaderboard
+      summary: Points leaderboard; "this week" starts Monday 00:00 Asia/Jakarta
+      parameters:
+        - name: window
+          in: query
+          schema:
+            type: string
+            enum: [week, month, all]
+            default: week
+        - name: subject
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ranked users plus the sticky "you" row.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Leaderboard"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/notifications:
+    get:
+      tags: [Notifications]
+      operationId: listNotifications
+      summary: Newest 100 notifications, optional unread filter
+      parameters:
+        - name: unread
+          in: query
+          schema:
+            type: integer
+            enum: [0, 1]
+      responses:
+        "200":
+          description: Notifications.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/notifications/{id}/read:
+    post:
+      tags: [Notifications]
+      operationId: markNotificationRead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Marked read.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/notifications/read-all:
+    post:
+      tags: [Notifications]
+      operationId: markAllNotificationsRead
+      responses:
+        "204":
+          description: All marked read.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+  /api/files/{attachment_id}:
+    get:
+      tags: [Files]
+      operationId: getFile
+      summary: Attachment download (visibility checked)
+      parameters:
+        - name: attachment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The file with its original filename.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: Session token from /api/auth/login or /api/auth/register (stored in localStorage).
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    JobId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DocumentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    EventId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    SuggestionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    QuestionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    AnswerId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  responses:
+    Unauthenticated:
+      description: Missing or invalid Bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Validation:
+      description: Request failed validation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: Per-user rate limit exceeded (AI 20/min, uploads 10/min).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    FileTooLarge:
+      description: File exceeds MAX_UPLOAD_MB.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    AIUnavailable:
+      description: ModelScope call failed after retries.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    TokenInvalid:
+      description: The configured ModelScope token is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotImplemented:
+      description: Skeleton only (P1); implemented in later phases.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Lang:
+      type: string
+      enum: [id, en, zh]
+      default: id
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message_key]
+          properties:
+            code:
+              type: string
+              description: >
+                Known codes: unauthenticated, not_found, validation, rate_limited,
+                file_too_long, file_too_large, username_taken, terms_required,
+                weak_password, invalid_username, invalid_credentials,
+                invalid_time_range, media_too_long, transcription_disabled,
+                self_vote, hint_limit_reached, ai_unavailable,
+                modelscope_token_invalid, not_implemented.
+            message_key:
+              type: string
+              description: "i18n key, always errors.<code>; the UI appends \"Coba lagi\"."
+
+    Health:
+      type: object
+      required: [server, modelscope, whisper, version]
+      properties:
+        server:
+          type: string
+          const: ok
+        modelscope:
+          type: string
+          enum: [ok, invalid_token, unreachable, checking]
+        modelscope_latency_ms:
+          type: integer
+          minimum: 0
+        whisper:
+          type: string
+          enum: [ready, loading, idle, disabled, error]
+        version:
+          type: string
+
+    User:
+      type: object
+      required: [username, display_name, lang, theme, onboarding_done]
+      properties:
+        username:
+          type: string
+          pattern: "^[A-Za-z0-9_]{3,20}$"
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        lang:
+          $ref: "#/components/schemas/Lang"
+        theme:
+          type: string
+          enum: [system, light, dark]
+        reduce_motion:
+          type: boolean
+          default: false
+        onboarding_done:
+          type: boolean
+
+    RegisterRequest:
+      type: object
+      required: [username, display_name, password, lang, accept_terms]
+      properties:
+        username:
+          type: string
+          pattern: "^[A-Za-z0-9_]{3,20}$"
+          description: 3-20 characters [A-Za-z0-9_], unique.
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        password:
+          type: string
+          minLength: 8
+          maxLength: 200
+        lang:
+          $ref: "#/components/schemas/Lang"
+        accept_terms:
+          type: boolean
+          default: false
+          description: "Must be true; otherwise the server returns terms_required."
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+
+    Me:
+      type: object
+      required: [user, points, rank, unread, onboarding_done]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        points:
+          type: integer
+          minimum: 0
+        rank:
+          type: integer
+          minimum: 1
+        unread:
+          type: integer
+          minimum: 0
+        onboarding_done:
+          type: boolean
+
+    PatchMeRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        lang:
+          $ref: "#/components/schemas/Lang"
+        theme:
+          type: string
+          enum: [system, light, dark]
+        reduce_motion:
+          type: boolean
+        notif_prefs:
+          type: object
+          additionalProperties:
+            type: boolean
+
+    Subject:
+      type: object
+      required: [id, name, followed]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          maxLength: 50
+        followed:
+          type: boolean
+
+    Dashboard:
+      type: object
+      required: [week, next_event, stats, points_ring, questions_for_you, reminders, top5, me_row, recent]
+      properties:
+        week:
+          type: array
+          minItems: 7
+          maxItems: 7
+          description: Monday to Sunday, ISO dates.
+          items:
+            type: object
+            required: [date, events]
+            properties:
+              date:
+                type: string
+                format: date
+              events:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+        next_event:
+          oneOf:
+            - $ref: "#/components/schemas/Event"
+            - type: "null"
+        stats:
+          type: object
+          required: [summaries, transcripts, my_unanswered, points, rank]
+          properties:
+            summaries:
+              type: integer
+              minimum: 0
+            transcripts:
+              type: integer
+              minimum: 0
+            my_unanswered:
+              type: integer
+              minimum: 0
+            points:
+              type: integer
+              minimum: 0
+            rank:
+              type: integer
+              minimum: 1
+        points_ring:
+          type: object
+          required: [current, target, rank]
+          properties:
+            current:
+              type: integer
+              minimum: 0
+              description: Points this week (Asia/Jakarta, from Monday 00:00).
+            target:
+              type: integer
+              minimum: 0
+              description: Points needed for the next rank.
+            rank:
+              type: integer
+              minimum: 1
+        questions_for_you:
+          type: array
+          items:
+            $ref: "#/components/schemas/Question"
+        reminders:
+          type: array
+          items:
+            type: object
+            required: [kind, text_key, created_at]
+            properties:
+              kind:
+                type: string
+                enum: [event_soon, new_question, new_answer, best_answer, rank_change]
+              text_key:
+                type: string
+              text_params:
+                type: object
+                additionalProperties: true
+              created_at:
+                type: string
+                format: date-time
+        top5:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/LeaderboardRow"
+        me_row:
+          $ref: "#/components/schemas/LeaderboardRow"
+        recent:
+          type: array
+          maxItems: 6
+          items:
+            type: object
+            required: [kind, title, created_at]
+            properties:
+              kind:
+                type: string
+                enum: [summary, transcript]
+              title:
+                type: string
+              subject:
+                type: string
+              created_at:
+                type: string
+                format: date-time
+
+    Job:
+      type: object
+      required: [id, kind, status, stage, stages, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [summary, transcript]
+        status:
+          type: string
+          enum: [queued, running, done, error]
+        stage:
+          type: string
+          description: >
+            summary: extract | figures | chunk | map | reduce | format_check | deadlines;
+            transcript: probe | transcribe | parse | translate | summarize.
+        stages:
+          type: array
+          items:
+            type: string
+        result_document_id:
+          type: [integer, "null"]
+        error_code:
+          type: [string, "null"]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    JobRef:
+      type: object
+      required: [job_id]
+      properties:
+        job_id:
+          type: string
+          format: uuid
+
+    Document:
+      type: object
+      required: [id, kind, title, content_md, created_at]
+      properties:
+        id:
+          type: integer
+        kind:
+          type: string
+          enum: [summary, transcript]
+        title:
+          type: string
+        subject_id:
+          type: [integer, "null"]
+        subject:
+          type: [string, "null"]
+        source_files:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              name:
+                type: string
+              size_bytes:
+                type: integer
+                minimum: 0
+        content_md:
+          type: string
+        extra:
+          type: object
+          description: >
+            summary: "{figures: [Figure], sources: [{label, text}], ai_calls: [...]}"
+            transcript: {segments: [{start, end, text}], translations: {lang: [...]},
+            meeting: {summary_md, decisions, action_items}, ai_calls: [...]}
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: [string, "null"]
+          format: date-time
+
+    DocumentList:
+      type: object
+      required: [items, total, page, pages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        pages:
+          type: integer
+          minimum: 0
+
+    Figure:
+      type: object
+      required: [ref_no, kind, caption, relevance, included]
+      properties:
+        ref_no:
+          type: integer
+        kind:
+          type: string
+          enum: [extracted, chart]
+        source_label:
+          type: string
+        category:
+          type: string
+        caption:
+          type: string
+        relevance:
+          type: number
+          minimum: 0
+          maximum: 1
+        included:
+          type: boolean
+        width:
+          type: [integer, "null"]
+        height:
+          type: [integer, "null"]
+        chart_spec:
+          type: ["object", "null"]
+          description: Present for kind=chart (SPEC §10.6 ChartSpec).
+
+    Event:
+      type: object
+      required: [id, title, start_at, end_at, source, created_at]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+          maxLength: 150
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+          description: "Must be strictly after start_at (invalid_time_range otherwise)."
+        location:
+          type: [string, "null"]
+        description:
+          type: [string, "null"]
+        reminder_minutes:
+          type: [integer, "null"]
+          enum: [10, 60, 1440, null]
+        source:
+          type: string
+          enum: [manual, ai, google]
+        google_event_id:
+          type: [string, "null"]
+        created_at:
+          type: string
+          format: date-time
+
+    CreateEventRequest:
+      type: object
+      required: [title, start_at, end_at]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+          description: "Must be strictly after start_at (invalid_time_range otherwise)."
+        location:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          maxLength: 2000
+        reminder_minutes:
+          type: integer
+          enum: [10, 60, 1440]
+
+    Suggestion:
+      type: object
+      required: [id, title, start_at, evidence, status]
+      properties:
+        id:
+          type: integer
+        document_id:
+          type: [integer, "null"]
+        title:
+          type: string
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: [string, "null"]
+          format: date-time
+        evidence:
+          type: string
+        status:
+          type: string
+          enum: [pending, added, dismissed]
+
+    Question:
+      type: object
+      required: [id, title, subject, author, status, answers_count, score, created_at]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+          minLength: 10
+          maxLength: 150
+          description: "10-150 characters, enforced client and server."
+        body_md:
+          type: [string, "null"]
+        subject:
+          type: string
+        subject_id:
+          type: [integer, "null"]
+        tags:
+          type: array
+          maxItems: 5
+          items:
+            type: string
+        author:
+          $ref: "#/components/schemas/Author"
+        status:
+          type: string
+          enum: [open, answered]
+        best_answer_id:
+          type: [integer, "null"]
+        answers_count:
+          type: integer
+          minimum: 0
+        score:
+          type: integer
+        excerpt:
+          type: [string, "null"]
+          description: 160-character excerpt for list rows.
+        has_attachment:
+          type: boolean
+          default: false
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: [string, "null"]
+          format: date-time
+
+    QuestionDetail:
+      allOf:
+        - $ref: "#/components/schemas/Question"
+        - type: object
+          required: [answers]
+          properties:
+            answers:
+              type: array
+              items:
+                $ref: "#/components/schemas/Answer"
+            following:
+              type: boolean
+            votes_mine:
+              type: integer
+              enum: [-1, 0, 1]
+            hints_remaining:
+              type: integer
+              minimum: 0
+              maximum: 3
+
+    QuestionList:
+      type: object
+      required: [items, total, page, pages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Question"
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        pages:
+          type: integer
+          minimum: 0
+
+    Author:
+      type: object
+      required: [username, display_name]
+      properties:
+        username:
+          type: string
+        display_name:
+          type: string
+
+    Answer:
+      type: object
+      required: [id, body_md, author, score, is_best, created_at]
+      properties:
+        id:
+          type: integer
+        body_md:
+          type: string
+        author:
+          $ref: "#/components/schemas/Author"
+        score:
+          type: integer
+        is_best:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: [string, "null"]
+          format: date-time
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attachment"
+
+    Attachment:
+      type: object
+      required: [id, filename, mime, size_bytes]
+      properties:
+        id:
+          type: integer
+        filename:
+          type: string
+        mime:
+          type: string
+        size_bytes:
+          type: integer
+          minimum: 0
+
+    LeaderboardRow:
+      type: object
+      required: [rank, display_name, points, is_me]
+      properties:
+        rank:
+          type: integer
+          minimum: 1
+        username:
+          type: string
+        display_name:
+          type: string
+        points:
+          type: integer
+          minimum: 0
+        answers:
+          type: integer
+          minimum: 0
+        best_answers:
+          type: integer
+          minimum: 0
+        is_me:
+          type: boolean
+
+    Leaderboard:
+      type: object
+      required: [items, me, window]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardRow"
+        me:
+          oneOf:
+            - $ref: "#/components/schemas/LeaderboardRow"
+            - type: "null"
+        window:
+          type: string
+          enum: [week, month, all]
+        subject:
+          type: [string, "null"]
+
+    NotificationList:
+      type: object
+      required: [items, unread]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/Notification"
+        unread:
+          type: integer
+          minimum: 0
+
+    Notification:
+      type: object
+      required: [id, kind, text_key, is_read, created_at]
+      properties:
+        id:
+          type: integer
+        kind:
+          type: string
+          enum: [event_soon, new_question, new_answer, best_answer, rank_change]
+        text_key:
+          type: string
+        text_params:
+          type: object
+          additionalProperties: true
+        link:
+          type: [string, "null"]
+        is_read:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time

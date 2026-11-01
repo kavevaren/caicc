@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<!--
+  Orvina | Dashboard mockup v2 (approved static design reference)
+  - Visual reference only: rebuild it as React components (see DESIGN.md), do not embed this file.
+  - Sample data is fake (names, numbers, dates). The real app shows data from the API.
+  - Math is faked with HTML here; the app renders it with KaTeX.
+  - The JavaScript only demos the theme toggle and mobile menu.
+  - DESIGN.md adds the motion (atom system) on top of this static layout.
+  - All text/background pairs were contrast-checked (WCAG AA) in light and dark mode.
+-->
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orvina | Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%231A1A2E'/%3E%3Cellipse cx='256' cy='256' rx='140' ry='58' fill='none' stroke='%234DA8DA' stroke-width='28' transform='rotate(-30 256 256)'/%3E%3Cellipse cx='256' cy='256' rx='140' ry='58' fill='none' stroke='%234DA8DA' stroke-width='28' transform='rotate(30 256 256)'/%3E%3Ccircle cx='256' cy='256' r='30' fill='%23F4A261'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ---------- Tokens (Orvina brand, contrast checked in code) ---------- */
+:root {
+  --primary: #1B6CA8;        /* white text 5.59:1 */
+  --primary-hover: #15588A;
+  --on-primary: #FFFFFF;
+  --primary-tint: #E7F0F7;   /* primary text on it 4.85:1 */
+  --accent: #F4A261;         /* decorative only, never text */
+  --success: #2D6A4F;
+  --success-tint: #E6F2EC;
+  --warning-fill: #E9C46A;
+  --warning-text: #8A6100;
+  --warning-tint: #FBF3DC;
+  --danger: #C0392B;
+  --on-danger: #FFFFFF;      /* 5.44:1 */
+  --danger-tint: #FBE9E7;
+  --text: #1A1A2E;
+  --muted: #5A5A72;          /* 6.69:1 on surface */
+  --bg: #FAFAF7;
+  --surface: #FFFFFF;
+  --border: #E2E2DC;         /* card edges, decorative */
+  --border-strong: #8E8EA3;  /* control edges, 3.2:1 */
+  --orbit: #CBD9E6;
+  --logo-stroke: #1B6CA8;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
+  --radius-lg: 16px; --radius-md: 10px; --radius-sm: 6px;
+}
+[data-theme="dark"] {
+  --primary: #4DA8DA;
+  --primary-hover: #6BBDE8;
+  --on-primary: #12121A;     /* 7.03:1, white fails */
+  --primary-tint: #1B2E3E;   /* primary text on it 5.26:1 */
+  --success: #52B788;
+  --success-tint: #1A2E27;
+  --warning-fill: #E9C46A;
+  --warning-text: #E9C46A;
+  --warning-tint: #2E2A1C;
+  --danger: #F06A5E;
+  --on-danger: #12121A;      /* 6.15:1, white is only 3.03:1 */
+  --danger-tint: #3A2024;
+  --text: #E8E8F0;
+  --muted: #9898B0;
+  --bg: #12121A;
+  --surface: #1E1E2E;
+  --border: #2E2E42;
+  --border-strong: #6E6E8C;  /* 3.34:1 */
+  --orbit: #2F4A60;
+  --logo-stroke: #4DA8DA;    /* #1B6CA8 is only 2.93:1 here */
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 15px; line-height: 1.55;
+  background: var(--bg); color: var(--text);
+}
+h1, h2, h3, .num { font-family: 'Outfit', 'Inter', sans-serif; letter-spacing: -0.01em; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; border-radius: var(--radius-sm); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+svg.i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.math { font-family: 'Times New Roman', serif; font-style: italic; font-size: 1.08em; }
+.math .up { font-style: normal; }
+
+/* ---------- Shell ---------- */
+.app { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+.sidebar {
+  position: sticky; top: 0; height: 100vh;
+  background: var(--surface); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; padding: var(--space-5) var(--space-3);
+}
+.brand { display: flex; align-items: center; gap: 10px; padding: 0 var(--space-3); margin-bottom: var(--space-5); }
+.brand svg { width: 34px; height: 34px; }
+.brand span { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 22px; }
+.nav { list-style: none; display: grid; gap: 2px; }
+.nav a {
+  display: flex; align-items: center; gap: var(--space-3);
+  min-height: 44px; padding: 0 var(--space-3); border-radius: var(--radius-md);
+  color: var(--muted); font-weight: 500;
+}
+.nav a:hover { background: var(--bg); color: var(--text); }
+.nav a[aria-current="page"] { background: var(--primary-tint); color: var(--text); font-weight: 600; }
+.nav a[aria-current="page"] svg { color: var(--primary); }
+.nav .count {
+  margin-left: auto; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
+  background: var(--danger); color: var(--on-danger); font-size: 12px; font-weight: 600;
+  display: grid; place-items: center;
+}
+.me { margin-top: auto; border-top: 1px solid var(--border); padding: var(--space-4) var(--space-3) 0; display: flex; align-items: center; gap: var(--space-3); }
+.avatar {
+  width: 36px; height: 36px; border-radius: 50%; flex: none;
+  background: var(--primary-tint); color: var(--primary);
+  display: grid; place-items: center; font-weight: 600; font-size: 13px;
+}
+.me .who { flex: 1; line-height: 1.3; }
+.me .who strong { display: block; font-size: 14px; }
+.me .who span { font-size: 13px; color: var(--muted); }
+.logout { min-height: 44px; padding: 0 var(--space-2); color: var(--muted); font-size: 14px; border-radius: var(--radius-sm); }
+.logout:hover { color: var(--danger); }
+
+.main { min-width: 0; padding: var(--space-5) var(--space-6) var(--space-6); max-width: 1280px; }
+
+/* ---------- Header ---------- */
+.top { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-5); }
+.top h1 { font-size: 28px; font-weight: 700; line-height: 1.2; }
+.top .date { color: var(--muted); font-size: 14px; }
+.top .tools { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); }
+.lang { display: flex; border: 1px solid var(--border-strong); border-radius: var(--radius-md); overflow: hidden; }
+.lang button { min-width: 44px; min-height: 40px; padding: 0 10px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.lang button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+.icon-btn {
+  position: relative; width: 44px; height: 44px; border-radius: 50%;
+  border: 1px solid var(--border-strong); color: var(--text);
+  display: grid; place-items: center;
+}
+.icon-btn:hover { background: var(--surface); }
+.icon-btn .dot {
+  position: absolute; top: -3px; right: -3px; min-width: 20px; height: 20px; padding: 0 5px;
+  border-radius: 10px; background: var(--danger); color: var(--on-danger);
+  font-size: 12px; font-weight: 600; display: grid; place-items: center;
+}
+.menu-btn { display: none; }
+.scrim { display: none; }
+.theme-btn .moon { display: none; }
+[data-theme="dark"] .theme-btn .sun { display: none; }
+[data-theme="dark"] .theme-btn .moon { display: block; }
+
+/* ---------- Cards ---------- */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-5); }
+.card h2 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.card h2 svg { color: var(--primary); }
+.card h2 .more { margin-left: auto; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; color: var(--primary); min-height: 32px; display: flex; align-items: center; }
+.card h2 .more:hover { text-decoration: underline; }
+
+/* ---------- Hero: the week as an orbit ---------- */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 430px); gap: var(--space-5); align-items: center; margin-bottom: var(--space-4); padding: var(--space-5) var(--space-6); }
+.hero .kicker { color: var(--muted); font-size: 14px; }
+.hero h2 { display: block; font-size: 30px; font-weight: 700; line-height: 1.2; margin: 2px 0 var(--space-4); }
+.next { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--primary-tint); max-width: 460px; }
+.next .pin { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); margin-top: 6px; flex: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent); }
+.next strong { display: block; font-weight: 600; }
+.next span { font-size: 14px; color: var(--muted); }
+.hero-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-4); }
+.btn {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  min-height: 44px; padding: 0 var(--space-4); border-radius: var(--radius-md);
+  font-weight: 600; font-size: 15px; border: 1px solid var(--border-strong); color: var(--text);
+}
+.btn:hover { background: var(--bg); }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.btn.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.orbit { width: 100%; height: auto; display: block; color: var(--text); }
+.orbit .ring { fill: none; stroke: var(--orbit); stroke-width: 2; }
+.orbit .ring2 { fill: none; stroke: var(--orbit); stroke-width: 1.5; opacity: .5; }
+.orbit .ev { fill: var(--primary); }
+.orbit .free { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.5; }
+.orbit .today { fill: none; stroke: var(--accent); stroke-width: 3; }
+.orbit .core { fill: var(--accent); }
+.orbit text { font-family: 'Inter', sans-serif; font-size: 13px; fill: var(--muted); }
+.orbit text.on { fill: var(--text); font-weight: 600; }
+
+/* ---------- Stat strip ---------- */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); margin-bottom: var(--space-4); padding: 0; }
+.stat { padding: var(--space-4) var(--space-5); display: flex; align-items: center; gap: var(--space-3); }
+.stat + .stat { border-left: 1px solid var(--border); }
+.stat .num { font-size: 30px; font-weight: 600; line-height: 1; }
+.stat .lbl { font-size: 14px; color: var(--muted); line-height: 1.35; }
+.stat .lbl b { color: var(--text); font-weight: 600; }
+.pring { width: 52px; height: 52px; margin-left: auto; flex: none; }
+.pring .track { fill: none; stroke: var(--border); stroke-width: 5; }
+.pring .val { fill: none; stroke: var(--primary); stroke-width: 5; stroke-linecap: round; }
+.pring .tip { fill: var(--accent); }
+
+/* ---------- Quick actions ---------- */
+.actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin-bottom: var(--space-5); }
+.actions .btn { justify-content: flex-start; min-height: 56px; background: var(--surface); }
+.actions .btn.primary { background: var(--primary); }
+
+/* ---------- Two columns ---------- */
+.cols { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--space-4); align-items: start; }
+.stack { display: grid; gap: var(--space-4); }
+.list { list-style: none; }
+.list > li { padding: var(--space-3) 0; border-top: 1px solid var(--border); }
+.list > li:first-child { border-top: 0; padding-top: var(--space-1); }
+
+.ev-row { display: grid; grid-template-columns: 64px 1fr auto; gap: var(--space-3); align-items: center; }
+.when { line-height: 1.25; }
+.when b { display: block; font-weight: 600; }
+.when span { font-size: 13px; color: var(--muted); }
+.ev-row.is-today .when b { color: var(--primary); }
+.title { font-weight: 500; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 999px;
+  background: var(--primary-tint); color: var(--primary);
+}
+.chip.src { background: transparent; border: 1px solid var(--border); color: var(--muted); font-weight: 500; }
+.chip svg.i { width: 14px; height: 14px; }
+
+.q a { display: block; font-weight: 500; margin-bottom: 6px; }
+.q a:hover { color: var(--primary); }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); font-size: 13px; color: var(--muted); }
+.meta .open { color: var(--warning-text); font-weight: 600; }
+
+.rem { display: grid; grid-template-columns: 28px 1fr; gap: var(--space-3); align-items: start; }
+.rem .ic { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; }
+.rem .ic svg.i { width: 16px; height: 16px; }
+.rem .ic.danger { background: var(--danger-tint); color: var(--danger); }
+.rem .ic.success { background: var(--success-tint); color: var(--success); }
+.rem .ic.warn { background: var(--warning-tint); color: var(--warning-text); }
+.rem p { font-size: 14px; }
+.rem small { display: block; font-size: 13px; color: var(--muted); }
+
+.lb li { display: grid; grid-template-columns: 22px 32px 1fr auto; gap: var(--space-3); align-items: center; padding: var(--space-2) var(--space-2); border-radius: var(--radius-md); border-top: 0; }
+.lb li:first-child { padding-top: var(--space-2); }
+.lb .rank { font-family: 'Outfit', sans-serif; font-weight: 600; color: var(--muted); text-align: center; }
+.lb .avatar { width: 32px; height: 32px; font-size: 12px; }
+.lb .pts { font-family: 'Outfit', sans-serif; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lb li.you { background: var(--primary-tint); }
+.lb li.you .rank { color: var(--primary); }
+.lb li.you .avatar { background: var(--accent); color: #1A1A2E; }
+
+.act { display: grid; grid-template-columns: 28px 1fr; gap: var(--space-3); align-items: center; }
+.act .ic { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--border); display: grid; place-items: center; color: var(--muted); }
+.act .ic svg.i { width: 15px; height: 15px; }
+.act p { font-size: 14px; line-height: 1.35; }
+.act small { font-size: 13px; color: var(--muted); }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1100px) {
+  .hero { grid-template-columns: 1fr; }
+  .orbit-wrap { max-width: 460px; }
+  .cols { grid-template-columns: 1fr; }
+}
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { position: fixed; inset: 0 auto 0 0; width: 280px; z-index: 20; transform: translateX(-100%); transition: transform .2s ease; }
+  .sidebar.open { transform: none; box-shadow: 8px 0 32px rgba(0,0,0,.25); }
+  .scrim { position: fixed; inset: 0; background: rgba(18,18,26,.45); z-index: 10; display: none; }
+  .scrim.show { display: block; }
+  .menu-btn { display: grid; }
+  .main { padding: var(--space-4); }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .stat:nth-child(3) { border-left: 0; }
+  .stat:nth-child(n+3) { border-top: 1px solid var(--border); }
+  .actions { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .top { flex-wrap: wrap; }
+  .top h1 { font-size: 24px; }
+  .top .tools { margin-left: 0; width: 100%; order: 3; }
+  .top .tools .lang { margin-right: auto; }
+  .hero { padding: var(--space-4); }
+  .hero h2 { font-size: 24px; }
+  .stat { padding: var(--space-3) var(--space-4); flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+  .pring { position: absolute; right: 12px; top: 12px; width: 40px; height: 40px; }
+  .stat.points { position: relative; }
+  .card { padding: var(--space-4); }
+  .ev-row { grid-template-columns: 64px 1fr; }
+  .ev-row .chip { grid-column: 2; justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<!-- Line icons (24px, stroke 1.8), defined once and reused with <use> -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-dashboard" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+  <symbol id="i-doc-lines" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 14a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 6h3a3 3 0 0 1-3 4M7 6H4a3 3 0 0 0 3 4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-doc-plus" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14h6"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></symbol>
+  <symbol id="i-calendar-sm" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-alarm" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M7 17 17 7M9 7h8v8"/></symbol>
+  <symbol id="i-cup" viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+</svg>
+<a class="sr-only" href="#main">Lewati ke konten utama</a>
+<div class="app">
+  <div class="scrim" id="scrim" onclick="toggleMenu(false)"></div>
+
+  <aside class="sidebar" id="sidebar" aria-label="Navigasi utama">
+    <div class="brand">
+      <svg viewBox="0 0 512 512" aria-hidden="true"><ellipse cx="256" cy="256" rx="170" ry="70" fill="none" stroke="var(--logo-stroke)" stroke-width="24" transform="rotate(-30 256 256)"/><ellipse cx="256" cy="256" rx="170" ry="70" fill="none" stroke="var(--logo-stroke)" stroke-width="24" transform="rotate(30 256 256)"/><circle cx="256" cy="256" r="28" fill="#F4A261"/></svg>
+      <span>Orvina</span>
+    </div>
+    <nav>
+      <ul class="nav">
+        <li><a href="#" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-dashboard"/></svg>Dashboard</a></li>
+        <li><a href="#"><svg class="i" aria-hidden="true"><use href="#i-doc-lines"/></svg>Ringkas Materi</a></li>
+        <li><a href="#"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg>Rekam &amp; Transkrip</a></li>
+        <li><a href="#"><svg class="i" aria-hidden="true"><use href="#i-calendar"/></svg>Jadwal</a></li>
+        <li><a href="#"><svg class="i" aria-hidden="true"><use href="#i-chat"/></svg>Forum</a></li>
+        <li><a href="#"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg>Leaderboard</a></li>
+        <li><a href="#"><svg class="i" aria-hidden="true"><use href="#i-book"/></svg>Perpustakaan</a></li>
+        <li><a href="#"><svg class="i" aria-hidden="true"><use href="#i-bell"/></svg>Notifikasi<span class="count" aria-label="3 belum dibaca">3</span></a></li>
+        <li><a href="#"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg>Profil &amp; Pengaturan</a></li>
+      </ul>
+    </nav>
+    <div class="me">
+      <span class="avatar" aria-hidden="true">AL</span>
+      <div class="who"><strong>Aldo</strong><span>128 poin</span></div>
+      <button class="logout" type="button">Keluar</button>
+    </div>
+  </aside>
+
+  <main class="main" id="main">
+    <header class="top">
+      <button class="icon-btn menu-btn" type="button" aria-label="Buka menu" aria-controls="sidebar" aria-expanded="false" onclick="toggleMenu()"><svg class="i" aria-hidden="true"><use href="#i-menu"/></svg></button>
+      <div>
+        <h1>Halo, Aldo</h1>
+        <p class="date">Kamis, 29 Oktober 2026</p>
+      </div>
+      <div class="tools">
+        <div class="lang" role="group" aria-label="Bahasa tampilan">
+          <button type="button" aria-pressed="true">ID</button>
+          <button type="button" aria-pressed="false">EN</button>
+          <button type="button" aria-pressed="false" lang="zh">中文</button>
+        </div>
+        <button class="icon-btn" type="button" aria-label="Notifikasi, 3 belum dibaca"><svg class="i" aria-hidden="true"><use href="#i-bell"/></svg><span class="dot" aria-hidden="true">3</span></button>
+        <button class="icon-btn theme-btn" type="button" aria-label="Ganti ke mode gelap" onclick="toggleTheme(this)">
+          <svg class="i sun" aria-hidden="true"><use href="#i-sun"/></svg>
+          <svg class="i moon" aria-hidden="true"><use href="#i-moon"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Hero: this week as an orbit around you -->
+    <section class="card hero" aria-labelledby="week-h">
+      <div>
+        <p class="kicker">Minggu ini</p>
+        <h2 id="week-h">4 agenda, 1 hari ini</h2>
+        <div class="next">
+          <span class="pin" aria-hidden="true"></span>
+          <div><strong>UTS Kalkulus II</strong><span>Hari ini pukul 13.00, Gedung B 302</span></div>
+        </div>
+        <div class="hero-actions">
+          <a class="btn" href="#">Buka ringkasan Kalkulus II</a>
+          <a class="btn" href="#">Lihat jadwal</a>
+        </div>
+      </div>
+      <div class="orbit-wrap">
+        <svg class="orbit" viewBox="0 0 400 200" role="img" aria-label="Orbit tujuh hari: Kamis hari ini UTS Kalkulus II, Jumat tugas Struktur Data, Sabtu makalah AI Ethics, Senin kelas Statistika. Minggu, Selasa, dan Rabu kosong.">
+          <ellipse class="ring2" cx="200" cy="105" rx="150" ry="40" transform="rotate(-18 200 105)"/>
+          <ellipse class="ring" cx="200" cy="105" rx="165" ry="62"/>
+          <circle class="core" cx="200" cy="105" r="11"/>
+          <!-- Kam (today, event) -->
+          <circle class="today" cx="117.5" cy="158.7" r="13"/>
+          <circle class="ev" cx="117.5" cy="158.7" r="7"/>
+          <text class="on" x="117.5" y="190" text-anchor="middle">Kam</text>
+          <!-- Jum (event) -->
+          <circle class="ev" cx="36.8" cy="114.2" r="7"/>
+          <text x="22" y="138" text-anchor="middle">Jum</text>
+          <!-- Sab (event) -->
+          <circle class="ev" cx="79" cy="62.8" r="7"/>
+          <text x="62" y="46" text-anchor="middle">Sab</text>
+          <!-- Min (free) -->
+          <circle class="free" cx="212.3" cy="43.2" r="5"/>
+          <text x="212.3" y="28" text-anchor="middle">Min</text>
+          <!-- Sen (event) -->
+          <circle class="ev" cx="336.3" cy="70.1" r="7"/>
+          <text x="352" y="52" text-anchor="middle">Sen</text>
+          <!-- Sel (free) -->
+          <circle class="free" cx="357.7" cy="123.3" r="5"/>
+          <text x="380" y="148" text-anchor="middle">Sel</text>
+          <!-- Rab (free) -->
+          <circle class="free" cx="260.3" cy="162.7" r="5"/>
+          <text x="260.3" y="190" text-anchor="middle">Rab</text>
+        </svg>
+      </div>
+    </section>
+
+    <!-- Stat strip -->
+    <section class="card stats" aria-label="Ringkasan aktivitas">
+      <div class="stat"><span class="num">12</span><span class="lbl">ringkasan<br>tersimpan</span></div>
+      <div class="stat"><span class="num">5</span><span class="lbl">transkrip<br>tersimpan</span></div>
+      <div class="stat"><span class="num">2</span><span class="lbl">pertanyaanmu<br>belum terjawab</span></div>
+      <div class="stat points">
+        <span class="num">128</span><span class="lbl">poin minggu ini<br><b>peringkat 4</b></span>
+        <svg class="pring" viewBox="0 0 52 52" role="img" aria-label="Peringkat 4. Butuh 28 poin lagi untuk peringkat 3">
+          <circle class="track" cx="26" cy="26" r="21"/>
+          <!-- 128 of 156 (rank 3) = 82% of 131.9 -->
+          <circle class="val" cx="26" cy="26" r="21" stroke-dasharray="108.2 131.9" transform="rotate(-90 26 26)"/>
+          <circle class="tip" cx="7" cy="17.1" r="4"/>
+        </svg>
+      </div>
+    </section>
+
+    <!-- Quick actions -->
+    <section class="actions" aria-label="Mulai sesuatu">
+      <a class="btn primary" href="#"><svg class="i" aria-hidden="true"><use href="#i-doc-plus"/></svg>Ringkas materi baru</a>
+      <a class="btn" href="#"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg>Rekam kelas</a>
+      <a class="btn" href="#"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg>Ajukan pertanyaan</a>
+    </section>
+
+    <div class="cols">
+      <div class="stack">
+        <section class="card" aria-labelledby="sched-h">
+          <h2 id="sched-h"><svg class="i" aria-hidden="true"><use href="#i-calendar"/></svg>7 hari ke depan<a class="more" href="#">Semua jadwal</a></h2>
+          <ul class="list">
+            <li class="ev-row is-today"><div class="when"><b>Hari ini</b><span>13.00</span></div><span class="title">UTS Kalkulus II</span><span class="chip src"><svg class="i" aria-hidden="true"><use href="#i-calendar-sm"/></svg>Google Calendar</span></li>
+            <li class="ev-row"><div class="when"><b>Jum 30</b><span>23.59</span></div><span class="title">Tugas Struktur Data: binary tree</span><span class="chip src"><svg class="i" aria-hidden="true"><use href="#i-doc"/></svg>Dari ringkasan</span></li>
+            <li class="ev-row"><div class="when"><b>Sab 31</b><span>23.59</span></div><span class="title">Makalah AI Ethics</span><span class="chip src"><svg class="i" aria-hidden="true"><use href="#i-doc"/></svg>Dari ringkasan</span></li>
+            <li class="ev-row"><div class="when"><b>Sen 2</b><span>09.00</span></div><span class="title">Kelas Statistika: regresi linier</span><span class="chip src"><svg class="i" aria-hidden="true"><use href="#i-calendar-sm"/></svg>Google Calendar</span></li>
+          </ul>
+        </section>
+
+        <section class="card" aria-labelledby="q-h">
+          <h2 id="q-h"><svg class="i" aria-hidden="true"><use href="#i-chat"/></svg>Pertanyaan untuk kamu<a class="more" href="#">Buka forum</a></h2>
+          <ul class="list">
+            <li class="q"><a href="#">Turunan dari <span class="math">x<sup class="up">2</sup> <span class="up">sin</span> x</span> pakai aturan perkalian?</a><div class="meta"><span class="chip">Kalkulus II</span><span>3 jawaban</span><span>2 jam lalu</span></div></li>
+            <li class="q"><a href="#">Cara rotasi AVL tree setelah insert yang benar?</a><div class="meta"><span class="chip">Struktur Data</span><span>5 jawaban</span><span>5 jam lalu</span></div></li>
+            <li class="q"><a href="#">Kapan pakai uji-t dan kapan ANOVA untuk 3 kelompok?</a><div class="meta"><span class="chip">Statistika</span><span>1 jawaban</span><span>kemarin</span></div></li>
+            <li class="q"><a href="#">Integral <span class="math">∫ e<sup class="up">x</sup> <span class="up">cos</span> x dx</span> pakai integral parsial dua kali?</a><div class="meta"><span class="chip">Kalkulus II</span><span class="open">Belum ada jawaban</span><span>2 hari lalu</span></div></li>
+          </ul>
+        </section>
+      </div>
+
+      <div class="stack">
+        <section class="card" aria-labelledby="r-h">
+          <h2 id="r-h"><svg class="i" aria-hidden="true"><use href="#i-alarm"/></svg>Pengingat</h2>
+          <ul class="list">
+            <li class="rem"><span class="ic danger"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg></span><p>Makalah AI Ethics dikumpulkan 2 hari lagi<small>Sabtu, 31 Oktober</small></p></li>
+            <li class="rem"><span class="ic success"><svg class="i" aria-hidden="true"><use href="#i-chat"/></svg></span><p>Jawabanmu soal regresi dapat 5 vote baru<small>Hari ini</small></p></li>
+            <li class="rem"><span class="ic warn"><svg class="i" aria-hidden="true"><use href="#i-arrow-up"/></svg></span><p>Peringkatmu naik dari 7 ke 4<small>Kemarin</small></p></li>
+          </ul>
+        </section>
+
+        <section class="card" aria-labelledby="lb-h">
+          <h2 id="lb-h"><svg class="i" aria-hidden="true"><use href="#i-cup"/></svg>Top 5 minggu ini<a class="more" href="#">Leaderboard</a></h2>
+          <ol class="list lb">
+            <li><span class="rank">1</span><span class="avatar" aria-hidden="true">SR</span><span>Sari Rahmawati</span><span class="pts">214</span></li>
+            <li><span class="rank">2</span><span class="avatar" aria-hidden="true">BW</span><span>Budi Wijaya</span><span class="pts">187</span></li>
+            <li><span class="rank">3</span><span class="avatar" aria-hidden="true">LW</span><span>Li Wei</span><span class="pts">156</span></li>
+            <li class="you" aria-current="true"><span class="rank">4</span><span class="avatar" aria-hidden="true">AL</span><span><strong>Kamu</strong></span><span class="pts">128</span></li>
+            <li><span class="rank">5</span><span class="avatar" aria-hidden="true">DP</span><span>Dewi Puspita</span><span class="pts">112</span></li>
+          </ol>
+        </section>
+
+        <section class="card" aria-labelledby="a-h">
+          <h2 id="a-h"><svg class="i" aria-hidden="true"><use href="#i-pulse"/></svg>Aktivitas terakhir</h2>
+          <ul class="list">
+            <li class="act"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-doc"/></svg></span><p>Ringkasan regresi linier berganda<br><small>Statistika, 2 jam lalu</small></p></li>
+            <li class="act"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg></span><p>Transkrip pertemuan 9<br><small>Struktur Data, 5 jam lalu</small></p></li>
+            <li class="act"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-doc"/></svg></span><p>Ringkasan teorema Bayes<br><small>Statistika, kemarin</small></p></li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+<script>
+function toggleTheme(btn) {
+  var root = document.documentElement;
+  var dark = root.getAttribute('data-theme') !== 'dark';
+  if (dark) root.setAttribute('data-theme', 'dark'); else root.removeAttribute('data-theme');
+  btn.setAttribute('aria-label', dark ? 'Ganti ke mode terang' : 'Ganti ke mode gelap');
+}
+function toggleMenu(force) {
+  var sb = document.getElementById('sidebar');
+  var open = typeof force === 'boolean' ? force : !sb.classList.contains('open');
+  sb.classList.toggle('open', open);
+  document.getElementById('scrim').classList.toggle('show', open);
+  document.querySelector('.menu-btn').setAttribute('aria-expanded', open);
+}
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') toggleMenu(false); });
+</script>
+</body>
+</html>

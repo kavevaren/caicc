@@ -1,0 +1,33 @@
+# Secrets — never in the image (SPEC §2.5).
+.env
+
+# Docs, prompts, history, tests — not needed at runtime (SPEC §13).
+docs/
+prompts/
+arsip/
+e2e/
+scripts/
+brand/
+design/
+
+# Data and caches.
+data/
+uploads/
+figures/
+/tmp/orvina/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# Node (the image builds web/ itself).
+web/node_modules/
+web/dist/
+
+# Local build artifacts and misc.
+orvina-prompt-pack-v5.zip
+orvina-web/
+.git/
+.gitignore
